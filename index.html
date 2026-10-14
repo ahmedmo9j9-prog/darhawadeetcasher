@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>حواديت</title>
+<link rel="icon" href="logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--o:#EF5B3D;--ink:#26231F;--g:#6B6B6B;--bg:#F4F4F2;--ln:#DDDAD5}
+*{box-sizing:border-box}
+body{margin:0;font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 20px;flex-wrap:wrap}
+header img{width:44px;height:44px;border-radius:8px}
+header b{font-size:22px;margin-inline-end:12px}
+nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+button,input,select{font:inherit}
+nav button{background:none;border:0;color:#E8E6E1;padding:10px 14px;border-radius:8px;cursor:pointer}
+nav button.on{background:var(--o);color:#fff;font-weight:700}
+main{padding:20px;max-width:1280px;margin:auto}
+.card{background:#fff;border-radius:12px;padding:18px;margin-bottom:16px;overflow-x:auto}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+input,select{height:42px;padding:0 10px;border:1px solid var(--ln);border-radius:8px;background:#fff;color:var(--ink)}
+input.n{width:84px;text-align:center}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.btn{height:42px;padding:0 18px;border-radius:8px;border:2px solid var(--ink);background:#fff;color:var(--ink);font-weight:700;cursor:pointer}
+.btn.p{background:var(--o);border-color:var(--o);color:#fff}
+.btn.d{background:var(--ink);color:#fff}
+.lnk{background:none;border:0;color:#B3341A;cursor:pointer;padding:6px}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+th{text-align:right;color:var(--g);padding:8px 6px;border-bottom:1px solid var(--ln)}
+td{padding:7px 6px;border-bottom:1px solid #EEECE8}
+h2{margin:0 0 12px;font-size:18px}
+.tot{display:flex;justify-content:space-between;font-size:20px;font-weight:700;margin:14px 0}
+.bk{display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid #EEECE8;gap:8px}
+.bk small{color:var(--g)}
+.bk button:disabled{opacity:.4}
+#toast{position:fixed;bottom:20px;inset-inline:20px;max-width:420px;margin:auto;background:var(--ink);color:#fff;padding:12px 16px;border-radius:10px;display:none;z-index:9}
+:focus-visible{outline:3px solid var(--o);outline-offset:2px}
+.login{max-width:360px;margin:12vh auto;text-align:center}
+.login img{width:96px;border-radius:16px}
+.login input{width:100%;margin-bottom:10px}
+.err{color:#B3341A;min-height:22px}
+#invoice{display:none}
+@page{size:A5;margin:10mm}
+@media print{header,main,#toast{display:none!important}#invoice{display:block}.inv{font-size:13px}.inv table{min-width:0}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="invoice"></div>
+<div id="toast" role="status"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+/* ضع هنا بيانات مشروعك من Supabase > Project Settings > API */
+const SB_URL='ضع-رابط-المشروع-هنا';
+const SB_KEY='ضع-مفتاح-anon-هنا';
+
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=n=>Number(n||0).toLocaleString('ar-EG',{maximumFractionDigits:2});
+const DOM='@hawadeet.local';
+let me=null,tab='pos',books=[],cart=[];
+
+function msg(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>e.style.display='none',3500)}
+const fail=(e,t)=>{if(e){console.error(e);msg(t+': '+e.message);return true}return false};
+
+async function boot(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session)return login();
+  const{data}=await sb.from('profiles').select('*').eq('id',session.user.id).maybeSingle();
+  if(!data){await sb.auth.signOut();return login('الحساب غير مفعّل. كلّم المسؤول.')}
+  me=data;shell();
+}
+
+function login(err=''){
+  $('#app').innerHTML=`<form class="login" id="lf"><img src="logo.jpg" alt="حواديت"><h1>حواديت</h1>
+  <input id="u" placeholder="اسم المستخدم" autocomplete="username" required>
+  <input id="p" type="password" placeholder="كلمة السر" autocomplete="current-password" required>
+  <div class="err">${esc(err)}</div><button class="btn p" style="width:100%">دخول</button></form>`;
+  $('#lf').onsubmit=async e=>{e.preventDefault();
+    const{error}=await sb.auth.signInWithPassword({email:$('#u').value.trim().toLowerCase()+DOM,password:$('#p').value});
+    if(error)return login('اسم المستخدم أو كلمة السر غلط');boot()};
+}
+
+function shell(){
+  const tabs=[['pos','الكاشير'],['books','الكتب'],['exp','المصروفات']];
+  if(me.role==='admin')tabs.push(['cus','العهدة'],['users','المستخدمين']);
+  $('#app').innerHTML=`<header><img src="logo.jpg" alt=""><b>حواديت</b><nav>${tabs.map(t=>`<button data-t="${t[0]}" class="${t[0]===tab?'on':''}">${t[1]}</button>`).join('')}</nav>
+  <span>${esc(me.username)}</span><button class="btn" id="out">خروج</button></header><main id="view"></main>`;
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;shell()});
+  $('#out').onclick=async()=>{await sb.auth.signOut();me=null;login()};
+  ({pos,books:viewBooks,exp,cus,users})[tab]();
+}
+
+async function loadBooks(){const{data,error}=await sb.from('books').select('*').order('title');if(!fail(error,'تحميل الكتب'))books=data||[]}
+
+/* ===== الكاشير ===== */
+async function pos(){
+  await loadBooks();
+  $('#view').innerHTML=`<div class="grid"><div class="card"><div class="row"><input id="q" placeholder="ابحث بالاسم أو ISBN" style="flex:1" aria-label="بحث"></div><div id="bl"></div></div>
+  <div class="card"><h2>الفاتورة الحالية</h2><div id="ct"></div>
+  <div class="row"><label>مكان البيع <input id="pl" list="pls" value="المقر"></label><datalist id="pls"><option>المقر</option><option>أونلاين</option><option>معرض </option></datalist>
+  <label>خصم % <input id="ds" class="n" type="number" min="0" max="100" value="0"></label>
+  <label>الدفع <select id="py"><option>نقدي</option><option>فيزا</option><option>محفظة</option></select></label></div>
+  <div class="tot"><span>الإجمالي</span><span id="tt"></span></div>
+  <div class="row"><button class="btn d" id="ok" style="flex:1">إتمام البيع</button><button class="btn p" id="okp" style="flex:1">إتمام وطباعة</button></div></div></div>`;
+  $('#q').oninput=drawBooks;$('#ds').oninput=drawCart;
+  $('#ok').onclick=()=>checkout(false);$('#okp').onclick=()=>checkout(true);
+  drawBooks();drawCart();
+}
+function drawBooks(){
+  const q=($('#q').value||'').trim().toLowerCase();
+  const l=books.filter(b=>!q||(b.title+' '+(b.isbn||'')+' '+(b.author||'')).toLowerCase().includes(q)).slice(0,60);
+  $('#bl').innerHTML=l.map(b=>`<div class="bk"><div><b>${esc(b.title)}</b><br><small>${esc(b.author||'')} · المتاح ${b.qty}</small></div><div><b>${money(b.price)}</b> <button class="btn" ${b.qty<1?'disabled':''} onclick="add(${b.id})">إضافة</button></div></div>`).join('')||'<p>مفيش كتب. ارفع شيت الكتب من تبويب «الكتب».</p>';
+}
+function add(id){const b=books.find(x=>x.id===id),c=cart.find(x=>x.id===id);
+  if(c){if(c.qty<b.qty)c.qty++}else cart.push({id,title:b.title,price:+b.price,qty:1,max:b.qty});drawCart()}
+function setQ(i,v){const c=cart[i];c.qty=Math.max(1,Math.min(c.max,parseInt(v)||1));drawCart()}
+function total(){return cart.reduce((s,c)=>s+c.qty*c.price,0)*(1-(+$('#ds').value||0)/100)}
+function drawCart(){
+  $('#ct').innerHTML=cart.map((c,i)=>`<div class="bk"><span>${esc(c.title)}</span><span><input class="n" style="width:60px" type="number" value="${c.qty}" onchange="setQ(${i},this.value)" aria-label="الكمية"> <button class="lnk" onclick="cart.splice(${i},1);drawCart()">حذف</button></span></div>`).join('')||'<p>الفاتورة فاضية.</p>';
+  $('#tt').textContent=money(total())+' ج.م';
+}
+async function checkout(pr){
+  if(!cart.length)return msg('ضيف كتب للفاتورة الأول');
+  const snap={items:cart.map(c=>({...c})),disc:+$('#ds').value||0,place:$('#pl').value.trim()||'المقر',pay:$('#py').value};
+  const{data,error}=await sb.rpc('make_sale',{p_place:snap.place,p_disc:snap.disc,p_pay:snap.pay,p_items:snap.items});
+  if(fail(error,'تعذّر إتمام البيع'))return;
+  msg('تم البيع');
+  if(pr)printInv(data,snap);
+  cart=[];await loadBooks();drawBooks();drawCart();
+}
+function printInv(id,s){
+  const sub=s.items.reduce((a,c)=>a+c.qty*c.price,0),tot=sub*(1-s.disc/100);
+  $('#invoice').innerHTML=`<div class="inv" dir="rtl"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #26231F;padding-bottom:10px"><div style="display:flex;gap:10px;align-items:center"><img src="logo.jpg" width="54" alt=""><b style="font-size:26px">حواديت</b></div><div style="text-align:left"><b>فاتورة رقم ${id}</b><br>${new Date().toLocaleString('ar-EG')}</div></div>
+  <p>مكان البيع: ${esc(s.place)} · الكاشير: ${esc(me.username)}</p>
+  <table><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr>${s.items.map(c=>`<tr><td>${esc(c.title)}</td><td>${c.qty}</td><td>${money(c.price)}</td><td>${money(c.qty*c.price)}</td></tr>`).join('')}</table>
+  <p>الخصم: ${s.disc}%</p><h2>الإجمالي: ${money(tot)} ج.م</h2><p>طريقة الدفع: ${esc(s.pay)}</p><p style="text-align:center;border-top:1px dashed #999;padding-top:10px">شكراً لزيارتكم حواديت</p></div>`;
+  setTimeout(()=>window.print(),150);
+}
+
+/* ===== الكتب ===== */
+async function viewBooks(){
+  await loadBooks();const ad=me.role==='admin';
+  $('#view').innerHTML=`${ad?`<div class="card"><h2>إضافة كتب</h2><div class="row"><input type="file" id="xf" accept=".xlsx,.xls,.csv" hidden><button class="btn d" onclick="$('#xf').click()">رفع شيت Excel</button><button class="btn" id="tp">تنزيل نموذج الشيت</button></div>
+  <form class="row" id="nb"><input id="nt" placeholder="العنوان" required><input id="na" placeholder="المؤلف"><input id="ni" placeholder="ISBN"><input id="np" class="n" type="number" step="any" placeholder="السعر"><input id="nc" class="n" type="number" step="any" placeholder="التكلفة"><input id="nq" class="n" type="number" placeholder="الكمية"><button class="btn p">إضافة كتاب</button></form></div>`:''}
+  <div class="card"><h2>الكتب (${books.length})</h2><input id="bs" placeholder="بحث" style="margin-bottom:10px"><table><thead><tr><th>العنوان</th><th>المؤلف</th><th>ISBN</th><th>السعر</th><th>التكلفة</th><th>الكمية</th><th></th></tr></thead><tbody id="bt"></tbody></table></div>`;
+  $('#bs').oninput=drawBT;drawBT();
+  if(!ad)return;
+  $('#xf').onchange=e=>imp(e.target.files[0]);
+  $('#tp').onclick=()=>{const ws=XLSX.utils.aoa_to_sheet([['العنوان','المؤلف','ISBN','سعر الغلاف','التكلفة','الكمية']]),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'الكتب');XLSX.writeFile(wb,'نموذج-الكتب.xlsx')};
+  $('#nb').onsubmit=async e=>{e.preventDefault();
+    const{error}=await sb.from('books').insert({title:$('#nt').value.trim(),author:$('#na').value.trim()||null,isbn:$('#ni').value.trim()||null,price:+$('#np').value||0,cost:+$('#nc').value||0,qty:parseInt($('#nq').value)||0});
+    if(!fail(error,'تعذّرت الإضافة')){msg('تمت الإضافة');viewBooks()}};
+}
+function drawBT(){
+  const q=($('#bs').value||'').trim().toLowerCase(),ad=me.role==='admin';
+  $('#bt').innerHTML=books.filter(b=>!q||(b.title+' '+(b.isbn||'')+' '+(b.author||'')).toLowerCase().includes(q)).map(b=>`<tr><td><b>${esc(b.title)}</b></td><td>${esc(b.author||'')}</td><td>${esc(b.isbn||'')}</td>
+  ${['price','cost','qty'].map(f=>`<td><input class="n" type="number" step="any" value="${b[f]}" ${ad?'':'disabled'} onchange="upd(${b.id},'${f}',this.value)" aria-label="${f}"></td>`).join('')}
+  <td>${ad?`<button class="lnk" onclick="del(${b.id})">حذف</button>`:''}</td></tr>`).join('');
+}
+async function upd(id,f,v){const{error}=await sb.from('books').update({[f]:f==='qty'?parseInt(v)||0:+v||0}).eq('id',id);if(!fail(error,'تعذّر الحفظ')){msg('تم الحفظ');const b=books.find(x=>x.id===id);b[f]=v}}
+async function del(id){if(!confirm('حذف الكتاب؟'))return;const{error}=await sb.from('books').delete().eq('id',id);if(!fail(error,'تعذّر الحذف'))viewBooks()}
+async function imp(f){
+  if(!f)return;
+  const wb=XLSX.read(await f.arrayBuffer()),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+  const list=rows.map(r=>({title:String(r['العنوان']??'').trim(),author:r['المؤلف']?String(r['المؤلف']):null,isbn:r['ISBN']?String(r['ISBN']).trim():null,price:+r['سعر الغلاف']||0,cost:+r['التكلفة']||0,qty:parseInt(r['الكمية'])||0})).filter(x=>x.title);
+  if(!list.length)return msg('مفيش كتب في الملف. تأكد من أسماء الأعمدة (نزّل النموذج)');
+  const wi=[...new Map(list.filter(x=>x.isbn).map(x=>[x.isbn,x])).values()],ni=list.filter(x=>!x.isbn);
+  if(!confirm(`هيتم استيراد ${list.length} كتاب. الكتب اللي ليها نفس الـ ISBN هتتحدّث بيانتها وكميتها. نكمل؟`))return;
+  if(wi.length){const{error}=await sb.from('books').upsert(wi,{onConflict:'isbn'});if(fail(error,'فشل الاستيراد'))return}
+  if(ni.length){const{error}=await sb.from('books').insert(ni);if(fail(error,'فشل الاستيراد'))return}
+  msg('تم استيراد الكتب');viewBooks();
+}
+
+/* ===== المصروفات ===== */
+async function exp(){
+  const{data,error}=await sb.from('expenses').select('*').order('created_at',{ascending:false}).limit(100);if(fail(error,'تحميل المصروفات'))return;
+  const ad=me.role==='admin';
+  $('#view').innerHTML=`<div class="card"><h2>مصروف جديد</h2><form class="row" id="ef"><input id="ec" list="cats" placeholder="البند" required><datalist id="cats"><option>طباعة</option><option>إيجار بوث</option><option>مواصلات</option><option>تسويق</option><option>شحن</option></datalist><input id="ea" class="n" type="number" step="any" placeholder="المبلغ" required><input id="ep" placeholder="المكان / المعرض"><input id="en" placeholder="ملاحظة" style="flex:1"><button class="btn p">حفظ</button></form></div>
+  <div class="card"><h2>آخر المصروفات — الإجمالي ${money(data.reduce((s,x)=>s+ +x.amount,0))} ج.م</h2><table><tr><th>التاريخ</th><th>البند</th><th>المبلغ</th><th>المكان</th><th>ملاحظة</th><th></th></tr>${data.map(x=>`<tr><td>${new Date(x.created_at).toLocaleDateString('ar-EG')}</td><td>${esc(x.category)}</td><td>${money(x.amount)}</td><td>${esc(x.place||'')}</td><td>${esc(x.note||'')}</td><td>${ad?`<button class="lnk" onclick="delRow('expenses',${x.id},exp)">حذف</button>`:''}</td></tr>`).join('')}</table></div>`;
+  $('#ef').onsubmit=async e=>{e.preventDefault();const{error}=await sb.from('expenses').insert({category:$('#ec').value.trim(),amount:+$('#ea').value,place:$('#ep').value.trim()||null,note:$('#en').value.trim()||null});if(!fail(error,'تعذّر الحفظ')){msg('تم الحفظ');exp()}};
+}
+async function delRow(t,id,fn){if(!confirm('حذف؟'))return;const{error}=await sb.from(t).delete().eq('id',id);if(!fail(error,'تعذّر الحذف'))fn()}
+
+/* ===== العهدة ===== */
+async function cus(){
+  const{data,error}=await sb.from('custody').select('*').order('created_at',{ascending:false});if(fail(error,'تحميل العهدة'))return;
+  $('#view').innerHTML=`<div class="card"><h2>عهدة جديدة</h2><form class="row" id="cf"><input id="ch" placeholder="اسم المستلم" required><input id="ca" class="n" type="number" step="any" placeholder="المبلغ" required><input id="cn" placeholder="الغرض (مثلاً: معرض ...)" style="flex:1"><button class="btn p">تسليم عهدة</button></form></div>
+  <div class="card"><h2>سجل العهدة</h2><table><tr><th>المستلم</th><th>الغرض</th><th>المسلَّم</th><th>المصروف</th><th>المتبقي</th><th></th></tr>${data.map(x=>`<tr><td><b>${esc(x.holder)}</b></td><td>${esc(x.note||'')}</td><td>${money(x.amount)}</td><td><input class="n" type="number" step="any" value="${x.spent}" onchange="spent(${x.id},this.value)" aria-label="المصروف"></td><td><b>${money(x.amount-x.spent)}</b></td><td><button class="lnk" onclick="delRow('custody',${x.id},cus)">حذف</button></td></tr>`).join('')}</table></div>`;
+  $('#cf').onsubmit=async e=>{e.preventDefault();const{error}=await sb.from('custody').insert({holder:$('#ch').value.trim(),amount:+$('#ca').value,note:$('#cn').value.trim()||null});if(!fail(error,'تعذّر الحفظ')){msg('تم التسليم');cus()}};
+}
+async function spent(id,v){const{error}=await sb.from('custody').update({spent:+v||0}).eq('id',id);if(!fail(error,'تعذّر الحفظ')){msg('تم الحفظ');cus()}}
+
+/* ===== المستخدمين ===== */
+async function users(){
+  const{data,error}=await sb.from('profiles').select('*').order('username');if(fail(error,'تحميل المستخدمين'))return;
+  $('#view').innerHTML=`<div class="card"><h2>مستخدم جديد</h2><form class="row" id="uf"><input id="nu" placeholder="اسم المستخدم (حروف إنجليزي وأرقام)" pattern="[a-zA-Z0-9_.]+" required><input id="np2" type="password" minlength="6" placeholder="كلمة السر (٦ حروف على الأقل)" required><select id="nr"><option value="cashier">كاشير</option><option value="admin">أدمن</option></select><button class="btn p">إضافة</button></form></div>
+  <div class="card"><h2>المستخدمين</h2><table><tr><th>الاسم</th><th>الصلاحية</th><th></th></tr>${data.map(u=>`<tr><td><b>${esc(u.username)}</b></td><td>${u.role==='admin'?'أدمن':'كاشير'}</td><td>${u.id===me.id?'':`<button class="lnk" onclick="delRow('profiles','${u.id}',users)">إيقاف الحساب</button>`}</td></tr>`).join('')}</table></div>`;
+  $('#uf').onsubmit=async e=>{e.preventDefault();
+    const name=$('#nu').value.trim().toLowerCase();
+    const tmp=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:'tmp-signup'}});
+    const{data:r,error}=await tmp.auth.signUp({email:name+DOM,password:$('#np2').value});
+    if(fail(error,'تعذّر إنشاء المستخدم'))return;
+    const{error:e2}=await sb.from('profiles').insert({id:r.user.id,username:name,role:$('#nr').value});
+    if(!fail(e2,'تعذّر تفعيل المستخدم')){msg('تمت إضافة المستخدم');users()}};
+}
+boot();
+</script>
+</body>
+</html>
